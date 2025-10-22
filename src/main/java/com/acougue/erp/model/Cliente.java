@@ -91,4 +91,11 @@ public class Cliente {
     public void setAtivo(boolean ativo) { this.ativo = ativo; }
     public List<ContaReceber> getContasReceber() { return contasReceber; }
     public void setContasReceber(List<ContaReceber> contasReceber) { this.contasReceber = contasReceber; }
+
+    public void setCpf(String s) {
+    }
+
+    public void setEndereco(String s) {
+
+    }
 }

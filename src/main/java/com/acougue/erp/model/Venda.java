@@ -18,6 +18,10 @@ public class Venda {
     @Column(name = "data_hora")
     private LocalDateTime dataHora;
 
+    @ManyToOne
+    @JoinColumn(name = "cliente_id")
+    private Cliente cliente;
+
     @OneToMany(mappedBy = "venda", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<ItemVenda> itens = new ArrayList<>();
 
@@ -46,41 +50,106 @@ public class Venda {
 
     // Métodos
     public void calcularTotal() {
-        this.totalVenda = itens.stream()
-                .map(ItemVenda::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (itens != null && !itens.isEmpty()) {
+            this.totalVenda = itens.stream()
+                    .map(item -> item.getSubtotal() != null ? item.getSubtotal() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+        } else {
+            this.totalVenda = BigDecimal.ZERO;
+        }
     }
 
     public void calcularTroco() {
         if (valorPago != null && totalVenda != null) {
             this.troco = valorPago.subtract(totalVenda);
+        } else {
+            this.troco = BigDecimal.ZERO;
         }
     }
 
     public void adicionarItem(ItemVenda item) {
-        item.setVenda(this);
-        this.itens.add(item);
-        calcularTotal();
+        if (item != null) {
+            item.setVenda(this);
+            if (this.itens == null) {
+                this.itens = new ArrayList<>();
+            }
+            this.itens.add(item);
+            calcularTotal();
+        }
     }
 
     // Getters e Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public LocalDateTime getDataHora() { return dataHora; }
-    public void setDataHora(LocalDateTime dataHora) { this.dataHora = dataHora; }
-    public List<ItemVenda> getItens() { return itens; }
-    public void setItens(List<ItemVenda> itens) { this.itens = itens; }
-    public BigDecimal getTotalVenda() { return totalVenda; }
-    public void setTotalVenda(BigDecimal totalVenda) { this.totalVenda = totalVenda; }
-    public FormaPagamento getFormaPagamento() { return formaPagamento; }
-    public void setFormaPagamento(FormaPagamento formaPagamento) { this.formaPagamento = formaPagamento; }
-    public BigDecimal getValorPago() { return valorPago; }
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public LocalDateTime getDataHora() {
+        return dataHora;
+    }
+
+    public void setDataHora(LocalDateTime dataHora) {
+        this.dataHora = dataHora;
+    }
+
+    public Cliente getCliente() {
+        return cliente;
+    }
+
+    public void setCliente(Cliente cliente) {
+        this.cliente = cliente;
+    }
+
+    public List<ItemVenda> getItens() {
+        return itens;
+    }
+
+    public void setItens(List<ItemVenda> itens) {
+        this.itens = itens;
+        calcularTotal();
+    }
+
+    public BigDecimal getTotalVenda() {
+        return totalVenda != null ? totalVenda : BigDecimal.ZERO;
+    }
+
+    public void setTotalVenda(BigDecimal totalVenda) {
+        this.totalVenda = totalVenda;
+    }
+
+    public FormaPagamento getFormaPagamento() {
+        return formaPagamento;
+    }
+
+    public void setFormaPagamento(FormaPagamento formaPagamento) {
+        this.formaPagamento = formaPagamento;
+    }
+
+    public BigDecimal getValorPago() {
+        return valorPago != null ? valorPago : BigDecimal.ZERO;
+    }
+
     public void setValorPago(BigDecimal valorPago) {
         this.valorPago = valorPago;
         calcularTroco();
     }
-    public BigDecimal getTroco() { return troco; }
-    public void setTroco(BigDecimal troco) { this.troco = troco; }
-    public StatusVenda getStatus() { return status; }
-    public void setStatus(StatusVenda status) { this.status = status; }
+
+    public BigDecimal getTroco() {
+        return troco != null ? troco : BigDecimal.ZERO;
+    }
+
+    public void setTroco(BigDecimal troco) {
+        this.troco = troco;
+    }
+
+    public StatusVenda getStatus() {
+        return status != null ? status : StatusVenda.ABERTA;
+    }
+
+    public void setStatus(StatusVenda status) {
+        this.status = status;
+    }
 }

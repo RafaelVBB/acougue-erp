@@ -4,7 +4,6 @@ package com.acougue.erp.repository;
 import com.acougue.erp.model.Venda;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -13,24 +12,14 @@ import java.util.List;
 @Repository
 public interface VendaRepository extends JpaRepository<Venda, Long> {
 
-    // ✅ MÉTODO ADICIONADO PARA O DASHBOARD
-    List<Venda> findByDataHoraBetween(LocalDateTime inicio, LocalDateTime fim);
+    // Método para buscar vendas por período (usando LocalDateTime)
+    List<Venda> findByDataHoraBetween(LocalDateTime dataInicio, LocalDateTime dataFim);
 
-    @Query("SELECT v FROM Venda v WHERE v.status = 'FINALIZADA' ORDER BY v.dataHora DESC")
-    List<Venda> findVendasFinalizadas();
+    // Método para buscar vendas do dia atual - CORRIGIDO
+    @Query("SELECT v FROM Venda v WHERE FUNCTION('DATE', v.dataHora) = CURRENT_DATE")
+    List<Venda> findVendasDoDia();
 
-    // Método para buscar vendas por período (para relatórios)
-    @Query("SELECT v FROM Venda v WHERE v.dataHora BETWEEN :inicio AND :fim AND v.status = 'FINALIZADA'")
-    List<Venda> findVendasFinalizadasPorPeriodo(@Param("inicio") LocalDateTime inicio,
-                                                @Param("fim") LocalDateTime fim);
-
-    // Método para calcular faturamento total por período
-    @Query("SELECT SUM(v.totalVenda) FROM Venda v WHERE v.dataHora BETWEEN :inicio AND :fim AND v.status = 'FINALIZADA'")
-    Double calcularFaturamentoPorPeriodo(@Param("inicio") LocalDateTime inicio,
-                                         @Param("fim") LocalDateTime fim);
-
-    // Método para contar quantidade de vendas por período
-    @Query("SELECT COUNT(v) FROM Venda v WHERE v.dataHora BETWEEN :inicio AND :fim AND v.status = 'FINALIZADA'")
-    Long countVendasPorPeriodo(@Param("inicio") LocalDateTime inicio,
-                               @Param("fim") LocalDateTime fim);
+    // Método para buscar vendas do mês atual - CORRIGIDO
+    @Query("SELECT v FROM Venda v WHERE FUNCTION('YEAR', v.dataHora) = FUNCTION('YEAR', CURRENT_DATE) AND FUNCTION('MONTH', v.dataHora) = FUNCTION('MONTH', CURRENT_DATE)")
+    List<Venda> findVendasDoMes();
 }

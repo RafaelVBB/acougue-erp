@@ -7,12 +7,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
+import java.time.LocalTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class DashboardService {
@@ -27,323 +25,123 @@ public class DashboardService {
     private ClienteRepository clienteRepository;
 
     @Autowired
-    private ContaReceberRepository contaReceberRepository;
+    private PerdaRepository perdaRepository;
 
-    @Autowired
-    private ControlePerdaRepository controlePerdaRepository;
-// ADICIONE estes métodos ao DashboardService.java
-
-    public Map<String, Object> getMetricasAvancadas() {
-        LocalDate hoje = LocalDate.now();
-        LocalDate inicioMes = YearMonth.now().atDay(1);
-        LocalDate fimMes = YearMonth.now().atEndOfMonth();
-
-        // KPIs Avançados
-        BigDecimal faturamentoMes = calcularFaturamentoMes(inicioMes, fimMes);
-        BigDecimal custoMes = calcularCustoMes(inicioMes, fimMes);
-        BigDecimal lucroMes = faturamentoMes.subtract(custoMes);
-
-        // Métricas de Eficiência
-        BigDecimal ticketMedio = calcularTicketMedio(inicioMes, fimMes);
-        BigDecimal giroEstoque = calcularGiroEstoque();
-        BigDecimal margemLucro = faturamentoMes.compareTo(BigDecimal.ZERO) > 0 ?
-                lucroMes.divide(faturamentoMes, 4, RoundingMode.HALF_UP).multiply(new BigDecimal("100")) :
-                BigDecimal.ZERO;
-
-        return Map.of(
-                "periodo", Map.of("inicio", inicioMes.toString(), "fim", fimMes.toString()),
-                "kpis", Map.of(
-                        "faturamentoMes", faturamentoMes,
-                        "custoMes", custoMes,
-                        "lucroMes", lucroMes,
-                        "margemLucro", margemLucro,
-                        "ticketMedio", ticketMedio,
-                        "giroEstoque", giroEstoque
-                ),
-                "alertas", getAlertasAvancados(),
-                "metas", calcularProgressoMetas()
-        );
-    }
-
-    private BigDecimal calcularCustoMes(LocalDate inicio, LocalDate fim) {
-        // Implementar cálculo de custos (compras + perdas + despesas)
-        return BigDecimal.valueOf(15000.00); // Exemplo
-    }
-
-    private BigDecimal calcularTicketMedio(LocalDate inicio, LocalDate fim) {
-        List<Venda> vendas = vendaRepository.findByDataHoraBetween(
-                inicio.atStartOfDay(),
-                fim.atTime(23, 59, 59)
-        );
-
-        if (vendas.isEmpty()) return BigDecimal.ZERO;
-
-        BigDecimal totalVendas = vendas.stream()
-                .map(Venda::getTotalVenda)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        return totalVendas.divide(BigDecimal.valueOf(vendas.size()), 2, RoundingMode.HALF_UP);
-    }
-
-    private BigDecimal calcularGiroEstoque() {
-        // Implementar cálculo de giro de estoque
-        return BigDecimal.valueOf(2.5); // Exemplo
-    }
-
-    private Map<String, Object> getAlertasAvancados() {
-        List<Map<String, Object>> alertas = new ArrayList<>();
-
-        // Alertas de Margem
-        List<Produto> produtosBaixaMargem = produtoRepository.findByAtivoTrue().stream()
-                .filter(p -> p.calcularRentabilidadeAtual().compareTo(new BigDecimal("10")) < 0)
-                .collect(Collectors.toList());
-
-        if (!produtosBaixaMargem.isEmpty()) {
-            alertas.add(Map.of(
-                    "tipo", "MARGEM_BAIXA",
-                    "severidade", "ALTA",
-                    "mensagem", produtosBaixaMargem.size() + " produtos com margem abaixo de 10%",
-                    "produtos", produtosBaixaMargem.stream()
-                            .map(p -> p.getNome() + " (" + p.calcularRentabilidadeAtual() + "%)")
-                            .collect(Collectors.toList())
-            ));
-        }
-
-        return Map.of("alertas", alertas, "total", alertas.size());
-    }
-
-    private Map<String, Object> calcularProgressoMetas() {
-        return Map.of(
-                "faturamento", Map.of("meta", 50000, "atingido", 35000, "percentual", 70),
-                "clientes", Map.of("meta", 100, "atingido", 85, "percentual", 85),
-                "lucro", Map.of("meta", 12000, "atingido", 8500, "percentual", 71)
-        );
-    }
     public Map<String, Object> getDashboardData() {
-        LocalDate hoje = LocalDate.now();
-        LocalDate inicioMes = YearMonth.now().atDay(1);
-        LocalDate fimMes = YearMonth.now().atEndOfMonth();
+        Map<String, Object> dashboard = new HashMap<>();
 
-        // Métricas principais
-        BigDecimal faturamentoMes = calcularFaturamentoMes(inicioMes, fimMes);
-        BigDecimal totalAReceber = contaReceberRepository.getTotalAReceber();
-        BigDecimal totalPerdasMes = calcularPerdasMes(inicioMes, fimMes);
-        Long clientesAtivos = (long) clienteRepository.findByAtivoTrue().size();
+        try {
+            // Dados básicos
+            long totalProdutos = produtoRepository.count();
+            long totalClientes = clienteRepository.count();
+            long totalVendas = vendaRepository.count();
 
-        // Produtos mais vendidos
-        List<Map<String, Object>> produtosMaisVendidos = getProdutosMaisVendidos();
+            // Vendas do dia (usando método alternativo)
+            LocalDateTime inicioDia = LocalDate.now().atStartOfDay();
+            LocalDateTime fimDia = LocalDate.now().atTime(LocalTime.MAX);
+            List<Venda> vendasHoje = vendaRepository.findByDataHoraBetween(inicioDia, fimDia);
+            BigDecimal faturamentoHoje = calcularFaturamentoTotal(vendasHoje);
 
-        // Alertas
-        List<Map<String, Object>> alertas = getAlertas();
+            // Vendas do mês (usando método alternativo)
+            LocalDateTime inicioMes = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+            LocalDateTime fimMes = LocalDate.now().atTime(LocalTime.MAX);
+            List<Venda> vendasMes = vendaRepository.findByDataHoraBetween(inicioMes, fimMes);
+            BigDecimal faturamentoMes = calcularFaturamentoTotal(vendasMes);
 
-        // Evolução do faturamento (últimos 6 meses)
-        List<Map<String, Object>> evolucaoFaturamento = getEvolucaoFaturamento();
+            // Produtos com estoque baixo
+            List<Produto> produtosEstoqueBaixo = getProdutosEstoqueBaixo();
 
-        return Map.of(
-                "periodo", Map.of(
-                        "inicio", inicioMes.toString(),
-                        "fim", fimMes.toString()
-                ),
-                "metricas", Map.of(
-                        "faturamentoMes", faturamentoMes != null ? faturamentoMes : BigDecimal.ZERO,
-                        "totalAReceber", totalAReceber != null ? totalAReceber : BigDecimal.ZERO,
-                        "totalPerdasMes", totalPerdasMes,
-                        "clientesAtivos", clientesAtivos,
-                        "lucroEstimado", calcularLucroEstimado(faturamentoMes, totalPerdasMes)
-                ),
-                "produtosMaisVendidos", produtosMaisVendidos,
-                "alertas", alertas,
-                "evolucaoFaturamento", evolucaoFaturamento,
-                "resumoCategorias", getResumoPorCategoria()
-        );
-    }
+            dashboard.put("totalProdutos", totalProdutos);
+            dashboard.put("totalClientes", totalClientes);
+            dashboard.put("totalVendas", totalVendas);
+            dashboard.put("faturamentoHoje", faturamentoHoje);
+            dashboard.put("faturamentoMes", faturamentoMes);
+            dashboard.put("vendasHoje", vendasHoje.size());
+            dashboard.put("produtosEstoqueBaixo", produtosEstoqueBaixo);
+            dashboard.put("quantidadeEstoqueBaixo", produtosEstoqueBaixo.size());
+            dashboard.put("ultimaAtualizacao", LocalDateTime.now());
 
-    private BigDecimal calcularFaturamentoMes(LocalDate inicio, LocalDate fim) {
-        List<Venda> vendas = vendaRepository.findByDataHoraBetween(
-                inicio.atStartOfDay(),
-                fim.atTime(23, 59, 59)
-        );
-
-        return vendas.stream()
-                .map(Venda::getTotalVenda)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-    }
-
-    private BigDecimal calcularPerdasMes(LocalDate inicio, LocalDate fim) {
-        BigDecimal totalPerdas = controlePerdaRepository.sumValorPerdaPorPeriodo(inicio, fim);
-        return totalPerdas != null ? totalPerdas : BigDecimal.ZERO;
-    }
-
-    private BigDecimal calcularLucroEstimado(BigDecimal faturamento, BigDecimal perdas) {
-        // Estimativa simplificada: 25% de margem líquida
-        BigDecimal margemLiquida = new BigDecimal("0.25");
-        return faturamento.multiply(margemLiquida).subtract(perdas).max(BigDecimal.ZERO);
-    }
-
-    private List<Map<String, Object>> getProdutosMaisVendidos() {
-        List<Produto> produtos = produtoRepository.findByAtivoTrue();
-
-        return produtos.stream()
-                .sorted((p1, p2) -> Integer.compare(p2.getEstoqueAtual(), p1.getEstoqueAtual()))
-                .limit(5)
-                .map(produto -> {
-                    Map<String, Object> produtoMap = new HashMap<>();
-                    produtoMap.put("nome", produto.getNome());
-                    produtoMap.put("categoria", produto.getCategoria().toString());
-                    produtoMap.put("precoVenda", produto.getPrecoVenda());
-                    produtoMap.put("estoque", produto.getEstoqueAtual());
-                    produtoMap.put("rentabilidade", produto.calcularRentabilidadeAtual());
-                    return produtoMap;
-                })
-                .collect(Collectors.toList());
-    }
-
-    private List<Map<String, Object>> getAlertas() {
-        List<Map<String, Object>> alertas = new ArrayList<>();
-
-        // Alertas de estoque baixo
-        List<Produto> produtosEstoqueBaixo = produtoRepository.findProdutosComEstoqueBaixo();
-        if (!produtosEstoqueBaixo.isEmpty()) {
-            Map<String, Object> alertaEstoque = new HashMap<>();
-            alertaEstoque.put("tipo", "ESTOQUE_BAIXO");
-            alertaEstoque.put("severidade", "ALTA");
-            alertaEstoque.put("mensagem", produtosEstoqueBaixo.size() + " produtos com estoque baixo");
-
-            List<String> detalhes = produtosEstoqueBaixo.stream()
-                    .map(p -> p.getNome() + " (" + p.getEstoqueAtual() + " " + p.getUnidadeMedida() + ")")
-                    .collect(Collectors.toList());
-            alertaEstoque.put("detalhes", detalhes);
-
-            alertas.add(alertaEstoque);
+        } catch (Exception e) {
+            dashboard.put("erro", "Erro ao carregar dashboard: " + e.getMessage());
+            dashboard.put("totalProdutos", 0);
+            dashboard.put("totalClientes", 0);
+            dashboard.put("totalVendas", 0);
+            dashboard.put("faturamentoHoje", BigDecimal.ZERO);
+            dashboard.put("faturamentoMes", BigDecimal.ZERO);
+            dashboard.put("vendasHoje", 0);
         }
 
-        // Alertas de contas vencidas
-        List<ContaReceber> contasVencidas = contaReceberRepository.findContasVencidas(LocalDate.now());
-        if (!contasVencidas.isEmpty()) {
-            Map<String, Object> alertaContas = new HashMap<>();
-            alertaContas.put("tipo", "CONTAS_VENCIDAS");
-            alertaContas.put("severidade", "MEDIA");
-            alertaContas.put("mensagem", contasVencidas.size() + " contas vencidas");
+        return dashboard;
+    }
 
-            BigDecimal valorTotal = contasVencidas.stream()
-                    .map(ContaReceber::getSaldoDevedor)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-            alertaContas.put("valorTotal", valorTotal);
+    public Map<String, Object> getMetricasVendas(LocalDate dataInicio, LocalDate dataFim) {
+        Map<String, Object> metricas = new HashMap<>();
 
-            alertas.add(alertaContas);
+        try {
+            LocalDateTime inicio = dataInicio.atStartOfDay();
+            LocalDateTime fim = dataFim.atTime(LocalTime.MAX);
+
+            List<Venda> vendasPeriodo = vendaRepository.findByDataHoraBetween(inicio, fim);
+
+            BigDecimal faturamentoTotal = calcularFaturamentoTotal(vendasPeriodo);
+            int totalVendas = vendasPeriodo.size();
+            BigDecimal ticketMedio = totalVendas > 0 ?
+                    faturamentoTotal.divide(BigDecimal.valueOf(totalVendas), 2, BigDecimal.ROUND_HALF_UP) : BigDecimal.ZERO;
+
+            metricas.put("periodo", dataInicio + " a " + dataFim);
+            metricas.put("faturamentoTotal", faturamentoTotal);
+            metricas.put("totalVendas", totalVendas);
+            metricas.put("ticketMedio", ticketMedio);
+            metricas.put("dias", dataInicio.until(dataFim).getDays() + 1);
+
+        } catch (Exception e) {
+            metricas.put("erro", "Erro ao calcular métricas: " + e.getMessage());
         }
 
-        // Alertas de limite estourado
-        List<Cliente> clientesLimiteEstourado = clienteRepository.findClientesComLimiteEstourado();
-        if (!clientesLimiteEstourado.isEmpty()) {
-            Map<String, Object> alertaLimite = new HashMap<>();
-            alertaLimite.put("tipo", "LIMITE_ESTOURADO");
-            alertaLimite.put("severidade", "MEDIA");
-            alertaLimite.put("mensagem", clientesLimiteEstourado.size() + " clientes com limite estourado");
+        return metricas;
+    }
 
-            alertas.add(alertaLimite);
+    public Map<String, Object> getAlertas() {
+        Map<String, Object> alertas = new HashMap<>();
+
+        try {
+            List<Produto> produtosEstoqueBaixo = getProdutosEstoqueBaixo();
+            List<Map<String, Object>> alertasList = new ArrayList<>();
+
+            // Alertas de estoque baixo
+            for (Produto produto : produtosEstoqueBaixo) {
+                Map<String, Object> alerta = new HashMap<>();
+                alerta.put("tipo", "ESTOQUE_BAIXO");
+                alerta.put("mensagem", "Produto " + produto.getNome() + " com estoque baixo: " + produto.getEstoqueAtual() + " unidades");
+                alerta.put("produto", produto.getNome());
+                alerta.put("estoqueAtual", produto.getEstoqueAtual());
+                alerta.put("estoqueMinimo", produto.getEstoqueMinimo());
+                alerta.put("prioridade", "ALTA");
+                alertasList.add(alerta);
+            }
+
+            alertas.put("alertas", alertasList);
+            alertas.put("totalAlertas", alertasList.size());
+            alertas.put("alertasCriticos", produtosEstoqueBaixo.size());
+
+        } catch (Exception e) {
+            alertas.put("erro", "Erro ao carregar alertas: " + e.getMessage());
         }
 
         return alertas;
     }
 
-    private List<Map<String, Object>> getEvolucaoFaturamento() {
-        List<Map<String, Object>> evolucao = new ArrayList<>();
-
-        for (int i = 5; i >= 0; i--) {
-            YearMonth mes = YearMonth.now().minusMonths(i);
-            LocalDate inicio = mes.atDay(1);
-            LocalDate fim = mes.atEndOfMonth();
-
-            BigDecimal faturamento = calcularFaturamentoMes(inicio, fim);
-
-            Map<String, Object> mesMap = new HashMap<>();
-            mesMap.put("mes", mes.getMonth().toString());
-            mesMap.put("ano", mes.getYear());
-            mesMap.put("faturamento", faturamento != null ? faturamento : BigDecimal.ZERO);
-
-            evolucao.add(mesMap);
-        }
-
-        return evolucao;
-    }
-
-    private Map<String, Object> getResumoPorCategoria() {
-        List<Produto> produtos = produtoRepository.findByAtivoTrue();
-
-        Map<CategoriaCarne, List<Produto>> produtosPorCategoria = produtos.stream()
-                .collect(Collectors.groupingBy(Produto::getCategoria));
-
-        Map<String, Object> resumo = new HashMap<>();
-
-        for (Map.Entry<CategoriaCarne, List<Produto>> entry : produtosPorCategoria.entrySet()) {
-            CategoriaCarne categoria = entry.getKey();
-            List<Produto> produtosCategoria = entry.getValue();
-
-            BigDecimal valorEstoque = produtosCategoria.stream()
-                    .map(p -> p.getPrecoVenda() != null ? p.getPrecoVenda() : BigDecimal.ZERO)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            Map<String, Object> categoriaMap = new HashMap<>();
-            categoriaMap.put("quantidadeProdutos", produtosCategoria.size());
-            categoriaMap.put("valorEstoque", valorEstoque);
-            categoriaMap.put("estoqueTotal", produtosCategoria.stream()
-                    .mapToInt(Produto::getEstoqueAtual)
-                    .sum());
-
-            resumo.put(categoria.toString(), categoriaMap);
-        }
-
-        return resumo;
-    }
-
-    public Map<String, Object> getRelatorioVendas(LocalDate inicio, LocalDate fim) {
-        List<Venda> vendas = vendaRepository.findByDataHoraBetween(
-                inicio.atStartOfDay(),
-                fim.atTime(23, 59, 59)
-        );
-
-        BigDecimal totalVendas = vendas.stream()
-                .map(Venda::getTotalVenda)
-                .filter(Objects::nonNull)
+    // Métodos auxiliares
+    private BigDecimal calcularFaturamentoTotal(List<Venda> vendas) {
+        return vendas.stream()
+                .map(venda -> venda.getTotalVenda() != null ? venda.getTotalVenda() : BigDecimal.ZERO)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
-        long quantidadeVendas = vendas.size();
-
-        // Vendas por forma de pagamento
-        Map<FormaPagamento, BigDecimal> vendasPorFormaPagamento = new HashMap<>();
-        for (Venda venda : vendas) {
-            if (venda.getFormaPagamento() != null) {
-                FormaPagamento forma = venda.getFormaPagamento();
-                BigDecimal total = vendasPorFormaPagamento.getOrDefault(forma, BigDecimal.ZERO);
-                vendasPorFormaPagamento.put(forma, total.add(venda.getTotalVenda() != null ? venda.getTotalVenda() : BigDecimal.ZERO));
-            }
-        }
-
-        List<Map<String, Object>> vendasList = vendas.stream()
-                .map(v -> {
-                    Map<String, Object> vendaMap = new HashMap<>();
-                    vendaMap.put("id", v.getId());
-                    vendaMap.put("data", v.getDataHora().toString());
-                    vendaMap.put("total", v.getTotalVenda());
-                    vendaMap.put("formaPagamento", v.getFormaPagamento() != null ? v.getFormaPagamento().toString() : "N/A");
-                    vendaMap.put("quantidadeItens", v.getItens().size());
-                    return vendaMap;
-                })
-                .collect(Collectors.toList());
-
-        Map<String, Object> relatorio = new HashMap<>();
-        relatorio.put("periodo", Map.of("inicio", inicio.toString(), "fim", fim.toString()));
-        relatorio.put("totalVendas", totalVendas);
-        relatorio.put("quantidadeVendas", quantidadeVendas);
-        relatorio.put("ticketMedio", quantidadeVendas > 0 ?
-                totalVendas.divide(BigDecimal.valueOf(quantidadeVendas), 2, java.math.RoundingMode.HALF_UP) :
-                BigDecimal.ZERO);
-        relatorio.put("vendasPorFormaPagamento", vendasPorFormaPagamento);
-        relatorio.put("vendas", vendasList);
-
-        return relatorio;
+    private List<Produto> getProdutosEstoqueBaixo() {
+        List<Produto> produtos = produtoRepository.findByAtivoTrue();
+        return produtos.stream()
+                .filter(p -> p.getEstoqueAtual() <= p.getEstoqueMinimo())
+                .toList();
     }
 }
